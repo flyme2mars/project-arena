@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rotating 3D Donut</title>
+    <style>
+      body {
+        margin: 0;
+        background: black;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="donut"></canvas>
+    <script>
+      const canvas = document.getElementById('donut')
+      const ctx = canvas.getContext('2d')
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+
+      let A = 0,
+        B = 0
+      const R1 = 1,
+        R2 = 2,
+        K1 = 150,
+        K2 = 5
+      const width = canvas.width,
+        height = canvas.height
+
+      function renderFrame() {
+        ctx.fillStyle = 'black'
+        ctx.fillRect(0, 0, width, height)
+
+        const cosA = Math.cos(A),
+          sinA = Math.sin(A)
+        const cosB = Math.cos(B),
+          sinB = Math.sin(B)
+
+        for (let theta = 0; theta < 2 * Math.PI; theta += 0.1) {
+          for (let phi = 0; phi < 2 * Math.PI; phi += 0.07) {
+            const costheta = Math.cos(theta),
+              sintheta = Math.sin(theta)
+            const cosphi = Math.cos(phi),
+              sinphi = Math.sin(phi)
+
+            const circleX = R2 + R1 * costheta
+            const circleY = R1 * sintheta
+
+            const x = circleX * (cosB * cosphi + sinA * sinB * sinphi) - circleY * cosA * sinB
+            const y = circleX * (sinB * cosphi - sinA * cosB * sinphi) + circleY * cosA * cosB
+            const z = K2 + cosA * circleX * sinphi + circleY * sinA
+            const ooz = 1 / z
+
+            const xp = width / 2 + K1 * ooz * x
+            const yp = height / 2 - K1 * ooz * y
+            const luminance = cosphi * costheta * sinB - cosA * costheta * sinphi - sinA * sintheta + cosB * (cosA * sintheta - costheta * sinA * sinphi)
+
+            if (luminance > 0) {
+              const brightness = Math.floor(luminance * 255)
+              ctx.fillStyle = `rgb(${brightness},${brightness},${brightness})`
+              ctx.beginPath()
+              ctx.arc(xp, yp, 2 * ooz, 0, 2 * Math.PI)
+              ctx.fill()
+            }
+          }
+        }
+
+        A += 0.02
+        B += 0.04
+        requestAnimationFrame(renderFrame)
+      }
+
+      renderFrame()
+    </script>
+  </body>
+</html>
