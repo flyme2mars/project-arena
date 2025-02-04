@@ -1,73 +1,54 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Donut</title>
-    <style>
-      canvas {
-        border: 1px solid #000;
-      }
-    </style>
-  </head>
+<html>
   <body>
-    <canvas id="canvas" width="800" height="600"></canvas>
+    <canvas id="myCanvas" width="500" height="500"></canvas>
 
     <script>
-      var canvas = document.getElementById('canvas')
-      var ctx = canvas.getContext('2d')
+      const canvas = document.getElementById('myCanvas')
+      const ctx = canvas.getContext('2d')
+
+      const R = 100 // Radius from center of torus to center of tube
+      const r = 50 // Radius of tube
+
+      function torusPoint(u, v) {
+        let x = (R + r * Math.cos(v)) * Math.cos(u)
+        let y = (R + r * Math.cos(v)) * Math.sin(u)
+        let z = r * Math.sin(v)
+        return { x, y, z }
+      }
+
+      let theta = 0 // Angle for rotation around y-axis
 
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'black'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-        var A = 0 // rotating around Y axis
-        var B = 0 // rotating around Z axis
-        var R1 = 1 // radius of torus
-        var R2 = 2 // radius from center of torus to center of tube
-        var K1 = 100 // screen scaling factor
-        var K2 = 5 // 3D scaling factor
+        for (let u = 0; u < Math.PI * 2; u += 0.1) {
+          for (let v = 0; v < Math.PI * 2; v += 0.1) {
+            let point = torusPoint(u, v)
 
-        for (var i = 0; i < 6.28; i += 0.1) {
-          // i for theta
-          for (var j = 0; j < 6.28; j += 0.05) {
-            // j for phi
-            var c = Math.cos(i)
-            var s = Math.sin(i)
-            var c2 = Math.cos(j)
-            var s2 = Math.sin(j)
+            // Rotate around y-axis
+            let x = point.x * Math.cos(theta) - point.z * Math.sin(theta)
+            let y = point.y
+            let z = point.x * Math.sin(theta) + point.z * Math.cos(theta)
 
-            // 3D coordinates
-            var x = (R2 + R1 * c2) * c
-            var y = (R2 + R1 * c2) * s
-            var z = R1 * s2
+            // Simple perspective projection where z affects size and color
+            let scale = 200 / (200 + z)
+            let screenX = x * scale + canvas.width / 2
+            let screenY = y * scale + canvas.height / 2
 
-            // Rotation around Y and Z axes
-            var x0 = x
-            var y0 = c * y + s * z
-            var z0 = -s * y + c * z
-
-            // Project 3D to 2D
-            var ooz = 1 / (z0 + K2) // one over z
-            var xp = (canvas.width / 2 + K1 * ooz * x0) | 0
-            var yp = (canvas.height / 2 - K1 * ooz * y0) | 0
-
-            // Calculate 'luminosity' for coloring
-            var L = 0.7 * (c2 * c + s * Math.cos(A) * s2 + Math.cos(B) * c * Math.sin(A) * s2 + Math.sin(B) * s * s2)
-
-            // Choose color based on luminosity
-            if (L > 0) {
-              ctx.fillStyle = `hsl(${L * 120},100%,50%)`
-              ctx.beginPath()
-              ctx.arc(xp, yp, 1, 0, Math.PI * 2)
-              ctx.fill()
-            }
+            // Shading based on z-depth
+            let brightness = Math.max(0, Math.min(1, (z + r) / (2 * r))) // Normalize z between 0 and 1
+            let size = 2 * scale
+            ctx.fillStyle = `rgba(${255 * brightness}, ${255 * brightness}, ${255 * brightness}, 1)`
+            ctx.beginPath()
+            ctx.arc(screenX, screenY, size, 0, Math.PI * 2)
+            ctx.fill()
           }
         }
 
-        // Update rotation angles
-        A += 0.05
-        B += 0.03
-
+        theta += 0.05 // Increment rotation angle
         requestAnimationFrame(draw)
       }
 
