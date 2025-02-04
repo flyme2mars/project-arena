@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rotating 3D Donut</title>
+    <style>
+      /* Remove margins and set a black background */
+      body {
+        margin: 0;
+        background: black;
+        overflow: hidden;
+      }
+      /* Center the canvas and set its background */
+      canvas {
+        display: block;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="donutCanvas" width="800" height="600"></canvas>
+    <script>
+      const canvas = document.getElementById('donutCanvas')
+      const ctx = canvas.getContext('2d')
+
+      // Rotation angles for the donut
+      let A = 0,
+        B = 0
+      // Donut parameters:
+      // R1 is the radius of the donut tube,
+      // R2 is the radius from the torus center to the tube center,
+      // K2 helps establish the perspective depth.
+      const R1 = 1
+      const R2 = 2
+      const K2 = 5
+
+      // The render function draws the donut frame-by-frame.
+      function render() {
+        // Clear the canvas
+        ctx.fillStyle = 'black'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        // Precompute sines and cosines of the rotation angles
+        const cosA = Math.cos(A),
+          sinA = Math.sin(A)
+        const cosB = Math.cos(B),
+          sinB = Math.sin(B)
+
+        // Step through two angles theta and phi that parametrize the torus surface.
+        // theta rotates around the cross-sectional circle of the torus,
+        // phi rotates the entire torus.
+        for (let theta = 0; theta < 2 * Math.PI; theta += 0.07) {
+          for (let phi = 0; phi < 2 * Math.PI; phi += 0.02) {
+            const cosTheta = Math.cos(theta)
+            const sinTheta = Math.sin(theta)
+            const cosPhi = Math.cos(phi)
+            const sinPhi = Math.sin(phi)
+
+            // Compute the 3D coordinates of the point on the torus surface (before rotation)
+            // circleX is the distance from the center of the torus to a point on the tube,
+            // circleY is the vertical displacement on the tube.
+            const circleX = R2 + R1 * cosTheta
+            const circleY = R1 * sinTheta
+
+            // Apply 3D rotation to the point.
+            // This rotates the torus using the angles A and B.
+            const x3d = circleX * (cosB * cosPhi + sinA * sinB * sinPhi) - circleY * cosA * sinB
+            const y3d = circleX * (sinB * cosPhi - sinA * cosB * sinPhi) + circleY * cosA * cosB
+            const z3d = cosA * circleX * sinPhi + circleY * sinA
+
+            // Compute the perspective projection factor.
+            // The farther the point (larger z3d), the smaller it appears.
+            const ooz = 1 / (z3d + K2)
+            // Project (x3d, y3d) onto 2D canvas coordinates.
+            const xp = canvas.width / 2 + 150 * ooz * x3d
+            const yp = canvas.height / 2 - 150 * ooz * y3d
+
+            // Compute a luminance (brightness) for the point using a simple dot–product
+            // with an assumed light vector. This gives a crude shading effect.
+            const L = cosPhi * cosTheta * sinB - cosA * cosTheta * sinPhi - sinA * sinTheta + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi)
+
+            // Only draw points that are lit (L > 0)
+            if (L > 0) {
+              // Map brightness to a grayscale intensity (0–255).
+              const intensity = Math.floor(L * 255)
+              const color = `rgb(${intensity}, ${intensity}, ${intensity})`
+              // Optionally, adjust the dot size based on brightness.
+              const dotSize = L * 2
+
+              ctx.beginPath()
+              ctx.arc(xp, yp, dotSize, 0, 2 * Math.PI)
+              ctx.fillStyle = color
+              ctx.fill()
+            }
+          }
+        }
+
+        // Update the rotation angles for the next frame.
+        A += 0.07
+        B += 0.03
+        requestAnimationFrame(render)
+      }
+
+      render()
+    </script>
+  </body>
+</html>
