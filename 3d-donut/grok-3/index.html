@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Rotating 3D Donut</title>
+    <style>
+      /* Set the body background to black and remove margins */
+      body {
+        margin: 0;
+        background: black;
+      }
+      /* Ensure the canvas is displayed as a block element */
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Create a canvas element with specified width and height -->
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <script>
+      // Get the canvas element and its 2D rendering context
+      const canvas = document.getElementById('canvas')
+      const ctx = canvas.getContext('2d')
+
+      // Canvas dimensions
+      const W = canvas.width // 800 pixels
+      const H = canvas.height // 600 pixels
+
+      // Torus parameters (R is the major radius, r is the minor radius)
+      const R = 1 // Distance from center of tube to center of torus
+      const r = 0.5 // Radius of the tube
+
+      // Number of points along each parameter (θ and φ)
+      const N_theta = 50 // Number of points along the major circle
+      const N_phi = 50 // Number of points along the minor circle
+
+      // Z offset for perspective projection to ensure all z > 0
+      const Z_offset = 7.5
+
+      // Scaling factor to map projected coordinates to canvas size
+      const zoom = 1000
+
+      // Size of each point in pixels
+      const point_size = 2
+
+      // Rotation angles around y-axis (α) and x-axis (β)
+      let α = 0
+      let β = 0
+
+      // Rotation speeds (radians per frame)
+      const dα = 0.02 // Faster rotation around y-axis
+      const dβ = 0.01 // Slower rotation around x-axis for interesting motion
+
+      // Precompute points and their normals
+      const points = []
+      for (let i = 0; i < N_theta; i++) {
+        const θ = (i * 2 * Math.PI) / N_theta // Angle along major circle
+        for (let j = 0; j < N_phi; j++) {
+          const φ = (j * 2 * Math.PI) / N_phi // Angle along minor circle
+
+          // Parametric equations for torus position
+          const x = (R + r * Math.cos(φ)) * Math.cos(θ)
+          const y = (R + r * Math.cos(φ)) * Math.sin(θ)
+          const z = r * Math.sin(φ)
+
+          // Normal vector at the point (unit normal for torus)
+          const nx = Math.cos(θ) * Math.cos(φ)
+          const ny = Math.sin(θ) * Math.cos(φ)
+          const nz = Math.sin(φ)
+
+          // Store position and normal
+          points.push({ P: [x, y, z], N: [nx, ny, nz] })
+        }
+      }
+
+      // Light direction (normalized vector pointing from light source)
+      // Using (1,1,1) for balanced lighting from all directions
+      const L = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)]
+
+      // Animation function
+      function draw() {
+        // Clear the canvas by filling with black
+        ctx.fillStyle = 'black'
+        ctx.fillRect(0, 0, W, H)
+
+        // Update rotation angles
+        α += dα
+        β += dβ
+
+        // Precompute sine and cosine for rotations
+        const cα = Math.cos(α),
+          sα = Math.sin(α)
+        const cβ = Math.cos(β),
+          sβ = Math.sin(β)
+
+        // Process each point
+        points.forEach((point) => {
+          const P = point.P // Original position
+          const N = point.N // Original normal
+
+          // Apply rotation around x-axis (R_x(β))
+          const P_temp = [P[0], P[1] * cβ - P[2] * sβ, P[1] * sβ + P[2] * cβ]
+          const N_temp = [N[0], N[1] * cβ - N[2] * sβ, N[1] * sβ + N[2] * cβ]
+
+          // Apply rotation around y-axis (R_y(α))
+          const P_prime = [P_temp[0] * cα + P_temp[2] * sα, P_temp[1], -P_temp[0] * sα + P_temp[2] * cα]
+          const N_prime = [N_temp[0] * cα + N_temp[2] * sα, N_temp[1], -N_temp[0] * sα + N_temp[2] * cα]
+
+          // Translate along z-axis to ensure z > 0 for projection
+          const P_pp = [P_prime[0], P_prime[1], P_prime[2] + Z_offset]
+
+          // Only draw points in front of the viewer (z > 0)
+          if (P_pp[2] > 0) {
+            // Perspective projection
+            const x_2d = P_pp[0] / P_pp[2]
+            const y_2d = P_pp[1] / P_pp[2]
+
+            // Map to canvas coordinates
+            // Center at (W/2, H/2), account for y-axis inversion
+            const canvas_x = W / 2 + x_2d * zoom
+            const canvas_y = H / 2 - y_2d * zoom
+
+            // Compute brightness using dot product of normal and light direction
+            const brightness = Math.max(0, N_prime[0] * L[0] + N_prime[1] * L[1] + N_prime[2] * L[2])
+
+            // Draw point with brightness as alpha value
+            // Points are white, with opacity based on brightness
+            ctx.beginPath()
+            ctx.arc(canvas_x, canvas_y, point_size, 0, 2 * Math.PI)
+            ctx.fillStyle = `rgba(255,255,255,${brightness})`
+            ctx.fill()
+          }
+        })
+
+        // Schedule the next frame
+        requestAnimationFrame(draw)
+      }
+
+      // Start the animation
+      draw()
+    </script>
+  </body>
+</html>
