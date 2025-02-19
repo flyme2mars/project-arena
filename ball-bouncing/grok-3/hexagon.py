@@ -1,41 +1,107 @@
 import pygame
 import math
+import random
 
 # Initialize Pygame
 pygame.init()
 
-# Set up the window
-width, height = 800, 800
+# Set up the display
+width, height = 800, 600
 screen = pygame.display.set_mode((width, height))
-clock = pygame.time.Clock()
+pygame.display.set_caption("Ball Bouncing in Spinning Hexagon")
 
-# Define parameters
-s = 10.0  # Radius of the hexagon (distance from center to vertex)
-r = 0.5  # Ball radius
-g = 9.8  # Gravity (units/s²)
-omega = 1.0  # Angular speed of the hexagon (rad/s)
-e = 0.8  # Coefficient of restitution (bounciness, 0 to 1)
-f = 0.1  # Friction factor (reduces tangential velocity, 0 to 1)
-dt = 1 / 60.0  # Time step (assuming 60 fps)
-scale = 36.0  # Scale factor to map simulation units to pixels
-center_x, center_y = width / 2, height / 2  # Center of the screen
-N_trail = 10  # Number of trail positions
+# Define colors
+BLACK = (0, 0, 0)  # Background color
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+CYAN = (0, 255, 255)
+MAGENTA = (255, 0, 255)
+COLORS = [
+    RED,
+    GREEN,
+    BLUE,
+    YELLOW,
+    CYAN,
+    MAGENTA,
+]  # Vibrant colors for hexagon and particles
 
-# Initial conditions in the rotating frame
-theta = 0.0  # Initial rotation angle of the hexagon
-r_rot = [0.0, 0.0]  # Initial position of the ball (x_rot, y_rot)
-v_rot = [2.0, 0.0]  # Initial velocity of the ball (vx_rot, vy_rot)
+# Hexagon parameters
+center = (width / 2, height / 2)  # Center of the screen
+radius = 200  # Distance from center to hexagon vertex
+theta = 0  # Rotation angle (radians)
+omega = 0.01  # Angular speed (radians per frame)
 
-# Hexagon vertices in the rotating frame (stationary)
-vertices_rot = [
-    [s * math.cos(2 * math.pi * k / 6), s * math.sin(2 * math.pi * k / 6)]
+# Pre-calculate local hexagon vertices (unrotated)
+local_vertices = [
+    (radius * math.cos(2 * math.pi * k / 6), radius * math.sin(2 * math.pi * k / 6))
     for k in range(6)
 ]
 
-# Trail for the ball
-trail = []
+# Pre-calculate inward normals for each wall (for collision detection)
+local_normals = []
+for k in range(6):
+    v1 = local_vertices[k]
+    v2 = local_vertices[(k + 1) % 6]
+    dx = v2[0] - v1[0]
+    dy = v2[1] - v1[1]
+    normal = (-dy, dx)  # Perpendicular to wall
+    length = math.sqrt(normal[0] ** 2 + normal[1] ** 2)
+    normal = (normal[0] / length, normal[1] / length)
+    local_normals.append(normal)
 
-# Main simulation loop
+# Distance from center to each wall (apothem)
+h = radius * math.sqrt(3) / 2
+
+# Ball parameters
+ball_radius = 10
+ball_pos = [center[0], center[1]]  # Start at center
+ball_vel = [random.uniform(-5, 5), random.uniform(-10, -5)]  # Initial velocity
+trail = []  # Store trail positions
+
+# Physics parameters
+gravity = 0.1  # Downward acceleration per frame
+friction = 0.95  # Velocity reduction after bounce
+
+
+# Particle class for bounce effects
+class Particle:
+    def __init__(self, pos, vel, color, lifetime):
+        self.pos = list(pos)
+        self.vel = list(vel)
+        self.color = color
+        self.lifetime = lifetime
+
+    def update(self):
+        self.pos[0] += self.vel[0]
+        self.pos[1] += self.vel[1]
+        self.lifetime -= 1
+
+    def draw(self, screen):
+        if self.lifetime > 0:
+            alpha = int(255 * (self.lifetime / 30))
+            color = (*self.color[:3], alpha)
+            pygame.draw.circle(screen, color, (int(self.pos[0]), int(self.pos[1])), 2)
+
+
+# Particle list
+particles = []
+
+
+# Function to rotate a point by an angle
+def rotate(point, angle):
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+    x, y = point
+    return (cos_a * x - sin_a * y, sin_a * x + cos_a * y)
+
+
+# Clock for frame rate control
+clock = pygame.time.Clock()
+
+# Main game loop
 running = True
 while running:
     # Handle events
@@ -43,89 +109,116 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Update the rotation angle
-    theta += omega * dt
+    # Update hexagon rotation
+    theta += omega
+    theta %= 2 * math.pi  # Keep angle in [0, 2π)
 
-    # Compute gravity in the rotating frame
-    g_rot = [-g * math.sin(theta), -g * math.cos(theta)]
+    # Apply gravity to ball velocity
+    ball_vel[1] += gravity
 
-    # Compute total acceleration in the rotating frame
-    a_rot = [
-        g_rot[0] + omega**2 * r_rot[0] + 2 * omega * v_rot[1],
-        g_rot[1] + omega**2 * r_rot[1] - 2 * omega * v_rot[0],
-    ]
+    # Update ball position
+    ball_pos[0] += ball_vel[0]
+    ball_pos[1] += ball_vel[1]
 
-    # Update velocity and position
-    v_rot[0] += a_rot[0] * dt
-    v_rot[1] += a_rot[1] * dt
-    r_rot[0] += v_rot[0] * dt
-    r_rot[1] += v_rot[1] * dt
-
-    # Check for collisions with each side of the hexagon
-    for k in range(6):
-        P1 = vertices_rot[k]
-        P2 = vertices_rot[(k + 1) % 6]
-        V = [P2[0] - P1[0], P2[1] - P1[1]]
-        length = math.sqrt(V[0] ** 2 + V[1] ** 2)
-        N_outward = [V[1] / length, -V[0] / length]
-        N = [-N_outward[0], -N_outward[1]]  # Inward normal
-        d = (r_rot[0] - P1[0]) * N[0] + (r_rot[1] - P1[1]) * N[1]
-        if d < r:
-            penetration = r - d
-            # Correct position
-            r_rot[0] += penetration * N[0]
-            r_rot[1] += penetration * N[1]
-            # Update velocity with reflection and friction
-            dot_v_N = v_rot[0] * N[0] + v_rot[1] * N[1]
-            v_tangential = [v_rot[0] - dot_v_N * N[0], v_rot[1] - dot_v_N * N[1]]
-            v_rot[0] = (1 - f) * v_tangential[0] - e * dot_v_N * N[0]
-            v_rot[1] = (1 - f) * v_tangential[1] - e * dot_v_N * N[1]
-
-    # Transform positions to the inertial frame
-    cos_theta = math.cos(theta)
-    sin_theta = math.sin(theta)
-    # Ball position
-    x_inertial = r_rot[0] * cos_theta - r_rot[1] * sin_theta
-    y_inertial = r_rot[0] * sin_theta + r_rot[1] * cos_theta
-    ball_screen = [center_x + x_inertial * scale, center_y - y_inertial * scale]
-    # Hexagon vertices
-    hexagon_screen = [
-        [
-            center_x + (vx * cos_theta - vy * sin_theta) * scale,
-            center_y - (vx * sin_theta + vy * cos_theta) * scale,
-        ]
-        for vx, vy in vertices_rot
-    ]
-
-    # Add current ball position to trail
-    trail.append(ball_screen.copy())
-    if len(trail) > N_trail:
+    # Add current position to trail (limited to 50 points)
+    trail.append((ball_pos[0], ball_pos[1]))
+    if len(trail) > 50:
         trail.pop(0)
 
+    # Transform ball position to hexagon's rotating frame
+    rel_pos = (ball_pos[0] - center[0], ball_pos[1] - center[1])
+    ball_pos_rot = rotate(rel_pos, -theta)
+
+    # Check collisions with hexagon walls
+    signed_distances = [
+        local_normals[k][0] * ball_pos_rot[0]
+        + local_normals[k][1] * ball_pos_rot[1]
+        + h
+        for k in range(6)
+    ]
+    min_d = min(signed_distances)
+    wall_idx = signed_distances.index(min_d)
+
+    # Handle collision if ball is too close to a wall
+    if min_d < ball_radius:
+        # Transform velocity to rotating frame
+        ball_vel_rot = rotate(ball_vel, -theta)
+
+        # Reflect velocity across wall normal
+        n = local_normals[wall_idx]
+        dot = ball_vel_rot[0] * n[0] + ball_vel_rot[1] * n[1]
+        ball_vel_rot = (
+            ball_vel_rot[0] - 2 * dot * n[0],
+            ball_vel_rot[1] - 2 * dot * n[1],
+        )
+
+        # Apply friction
+        ball_vel_rot = (ball_vel_rot[0] * friction, ball_vel_rot[1] * friction)
+
+        # Transform velocity back to world frame
+        ball_vel = list(rotate(ball_vel_rot, theta))
+
+        # Adjust ball position to prevent sinking into wall
+        adjustment = ((ball_radius - min_d) * n[0], (ball_radius - min_d) * n[1])
+        ball_pos_rot = (
+            ball_pos_rot[0] + adjustment[0],
+            ball_pos_rot[1] + adjustment[1],
+        )
+
+        # Transform position back to world frame
+        rotated_back = rotate(ball_pos_rot, theta)
+        ball_pos = [center[0] + rotated_back[0], center[1] + rotated_back[1]]
+
+        # Add colorful particles on bounce
+        for _ in range(10):
+            particle_vel = [random.uniform(-2, 2), random.uniform(-2, 2)]
+            particles.append(
+                Particle(ball_pos, particle_vel, random.choice(COLORS), 30)
+            )
+
+    # Update particles
+    for particle in particles[:]:
+        particle.update()
+        if particle.lifetime <= 0:
+            particles.remove(particle)
+
     # Draw everything
-    screen.fill((0, 0, 0))  # Black background
+    screen.fill(BLACK)  # Black background
 
-    # Draw the trail
+    # Draw spinning hexagon with colorful sides
+    world_vertices = [
+        (center[0] + rotate(v, theta)[0], center[1] + rotate(v, theta)[1])
+        for v in local_vertices
+    ]
+    world_vertices = [(int(x), int(y)) for x, y in world_vertices]
+    for i in range(6):
+        start_pos = world_vertices[i]
+        end_pos = world_vertices[(i + 1) % 6]
+        pygame.draw.line(screen, COLORS[i % len(COLORS)], start_pos, end_pos, 3)
+
+    # Draw ball trail (fading white)
     for i, pos in enumerate(trail):
-        alpha = (i + 1) / len(trail)  # Ranges from 1/len(trail) to 1
-        radius = int(r * scale * alpha)  # Scales from small to full size
-        if radius > 0:
-            color = (int(255 * alpha), 0, 0)  # Red intensity from dim to bright
-            pygame.draw.circle(screen, color, (int(pos[0]), int(pos[1])), radius)
+        if len(trail) > 1:
+            factor = i / (len(trail) - 1)
+        else:
+            factor = 1
+        radius = int(1 + (ball_radius - 1) * factor)
+        brightness = int(255 * factor)
+        color = (brightness, brightness, brightness)
+        pygame.draw.circle(screen, color, (int(pos[0]), int(pos[1])), radius)
 
-    # Draw the hexagon outline
-    pygame.draw.polygon(screen, (255, 255, 255), hexagon_screen, 3)
+    # Draw ball (solid white)
+    pygame.draw.circle(screen, WHITE, (int(ball_pos[0]), int(ball_pos[1])), ball_radius)
 
-    # Draw the current ball
-    pygame.draw.circle(
-        screen, (255, 0, 0), (int(ball_screen[0]), int(ball_screen[1])), int(r * scale)
-    )
+    # Draw colorful particles
+    for particle in particles:
+        particle.draw(screen)
 
     # Update the display
     pygame.display.flip()
 
-    # Cap the frame rate to 60 fps
+    # Cap frame rate at 60 FPS
     clock.tick(60)
 
-# Quit Pygame
+# Clean up
 pygame.quit()

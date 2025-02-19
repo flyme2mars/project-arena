@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brick Breaker Game</title>
+  </head>
+  <body>
+    <!-- Include p5.js library from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+    <!-- Game code -->
+    <script>
+      // Global variables
+      let ballX,
+        ballY,
+        ballSpeedX,
+        ballSpeedY,
+        ballRadius = 10
+      let ballLaunched = false
+      let paddleWidth = 60,
+        paddleHeight = 10
+      let bricks = []
+      let rows = 5,
+        cols = 10
+      let brickWidth = 30,
+        brickHeight = 15,
+        brickSpacing = 5
+      let offsetX = 10,
+        offsetY = 10
+      let score = 0
+      let lives = 3
+
+      function setup() {
+        createCanvas(400, 400)
+        // Initialize ball position above the paddle
+        ballX = width / 2
+        ballY = height - 30
+        ballSpeedX = 0
+        ballSpeedY = 0
+        // Initialize bricks grid
+        for (let i = 0; i < rows; i++) {
+          bricks[i] = []
+          for (let j = 0; j < cols; j++) {
+            bricks[i][j] = true // Brick is present
+          }
+        }
+      }
+
+      function draw() {
+        background(0) // Black background
+
+        // Draw and update paddle
+        let paddleX = constrain(mouseX - paddleWidth / 2, 0, width - paddleWidth)
+        let paddleY = height - 20
+        fill(255) // White color
+        rect(paddleX, paddleY, paddleWidth, paddleHeight)
+
+        // Ball movement and collisions
+        if (!ballLaunched) {
+          // Ball follows paddle before launch
+          ballX = mouseX
+          ballY = height - 30
+        } else {
+          // Update ball position
+          ballX += ballSpeedX
+          ballY += ballSpeedY
+
+          // Wall collisions
+          if (ballX - ballRadius < 0 || ballX + ballRadius > width) {
+            ballSpeedX *= -1 // Bounce off left/right walls
+          }
+          if (ballY - ballRadius < 0) {
+            ballSpeedY *= -1 // Bounce off top wall
+          }
+          if (ballY + ballRadius > height) {
+            // Ball falls off bottom
+            lives--
+            if (lives > 0) {
+              // Reset ball if lives remain
+              ballLaunched = false
+              ballSpeedX = 0
+              ballSpeedY = 0
+            } else {
+              // Game over
+              textSize(32)
+              fill(255)
+              text('Game Over', width / 2 - 80, height / 2)
+              noLoop() // Stop the game loop
+            }
+          }
+
+          // Paddle collision
+          if (ballY + ballRadius > paddleY && ballX > paddleX && ballX < paddleX + paddleWidth && ballSpeedY > 0) {
+            // Ensure ball is moving downward
+            ballSpeedY *= -1 // Bounce ball upwards
+          }
+
+          // Brick collisions
+          for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+              if (bricks[i][j]) {
+                let brickX = offsetX + j * (brickWidth + brickSpacing)
+                let brickY = offsetY + i * (brickHeight + brickSpacing)
+                // Check for collision between ball and brick
+                if (ballX + ballRadius > brickX && ballX - ballRadius < brickX + brickWidth && ballY + ballRadius > brickY && ballY - ballRadius < brickY + brickHeight) {
+                  bricks[i][j] = false // Remove brick
+                  ballSpeedY *= -1 // Bounce ball
+                  score++ // Increment score
+                }
+              }
+            }
+          }
+        }
+
+        // Draw ball
+        fill(255)
+        ellipse(ballX, ballY, ballRadius * 2)
+
+        // Draw bricks
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            if (bricks[i][j]) {
+              let x = offsetX + j * (brickWidth + brickSpacing)
+              let y = offsetY + i * (brickHeight + brickSpacing)
+              rect(x, y, brickWidth, brickHeight)
+            }
+          }
+        }
+
+        // Display score and lives
+        textSize(16)
+        fill(255)
+        text('Score: ' + score, 10, 20)
+        text('Lives: ' + lives, width - 50, 20)
+
+        // Check win condition
+        if (allBricksCleared()) {
+          textSize(32)
+          fill(255)
+          text('You Win!', width / 2 - 60, height / 2)
+          noLoop() // Stop the game loop
+        }
+      }
+
+      // Function to check if all bricks are cleared
+      function allBricksCleared() {
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            if (bricks[i][j]) {
+              return false // At least one brick remains
+            }
+          }
+        }
+        return true // All bricks cleared
+      }
+
+      // Launch ball on mouse press
+      function mousePressed() {
+        if (!ballLaunched) {
+          ballLaunched = true
+          ballSpeedX = random(-2, 2) // Random horizontal speed
+          ballSpeedY = -3 // Upward speed
+        }
+      }
+    </script>
+  </body>
+</html>

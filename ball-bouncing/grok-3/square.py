@@ -4,134 +4,134 @@ import math
 # Initialize Pygame
 pygame.init()
 
-# Set up the window
-width, height = 800, 800
-screen = pygame.display.set_mode((width, height))
+# Constants
+WIDTH, HEIGHT = 800, 800  # Window size
+FPS = 60  # Frames per second
+DT = 0.01  # Time step for simulation
+GRAVITY = 0.1  # Gravity acceleration
+OMEGA = 1.0  # Angular velocity of the square (rad/s)
+E = 0.8  # Coefficient of restitution (elasticity)
+F = 0.9  # Friction factor (reduces tangential velocity)
+SCALE = 300  # Scale from simulation units to pixels
+
+# Set up the display
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Ball Bouncing in Spinning Square")
 clock = pygame.time.Clock()
 
-# Define parameters
-s = 10.0  # Side length of the square
-r = 0.5  # Ball radius
-g = 9.8  # Gravity (units/s²)
-omega = 1.0  # Angular speed of the square (rad/s)
-e = 0.8  # Coefficient of restitution (bounciness, 0 to 1)
-f = 0.1  # Friction factor (reduces tangential velocity, 0 to 1)
-dt = 1 / 60.0  # Time step (assuming 60 fps)
-scale = 500 / s  # Scale factor to map simulation units to pixels
-center_x, center_y = width / 2, height / 2  # Center of the screen
+# Ball properties
+x, y = 0, 0  # Initial position at center
+v_x, v_y = 1, 0  # Initial velocity
 
-# Initial conditions in the rotating frame
-theta = 0.0  # Initial rotation angle of the square
-r_rot = [0.0, 0.0]  # Initial position of the ball (x_rot, y_rot)
-v_rot = [2.0, 0.0]  # Initial velocity of the ball (vx_rot, vy_rot)
+# Simulation time
+t = 0
 
-# Square vertices in the rotating frame (stationary)
-vertices_rot = [
-    [s / 2, s / 2],  # Top-right
-    [-s / 2, s / 2],  # Top-left
-    [-s / 2, -s / 2],  # Bottom-left
-    [s / 2, -s / 2],  # Bottom-right
-]
 
-# Main simulation loop
+# Function to handle collision with the square's walls
+def handle_collision(n_rot, theta):
+    global x, y, v_x, v_y
+    cos_theta = math.cos(theta)
+    sin_theta = math.sin(theta)
+
+    # Compute velocity in the rotating frame
+    omega_cross_r = (-OMEGA * y, OMEGA * x)
+    v_lab_minus_omega_cross_r = (v_x + OMEGA * y, v_y - OMEGA * x)
+    v_rot_x = (
+        v_lab_minus_omega_cross_r[0] * cos_theta
+        + v_lab_minus_omega_cross_r[1] * sin_theta
+    )
+    v_rot_y = (
+        -v_lab_minus_omega_cross_r[0] * sin_theta
+        + v_lab_minus_omega_cross_r[1] * cos_theta
+    )
+    v_rot = (v_rot_x, v_rot_y)
+
+    # Decompose velocity into normal and tangential components
+    v_normal_mag = v_rot[0] * n_rot[0] + v_rot[1] * n_rot[1]
+    v_normal = (v_normal_mag * n_rot[0], v_normal_mag * n_rot[1])
+    v_tangential = (v_rot[0] - v_normal[0], v_rot[1] - v_normal[1])
+
+    # Apply collision response with elasticity and friction
+    v_rot_after = (
+        -E * v_normal[0] + F * v_tangential[0],
+        -E * v_normal[1] + F * v_tangential[1],
+    )
+
+    # Transform velocity back to lab frame
+    v_lab_after_x = (
+        cos_theta * v_rot_after[0] - sin_theta * v_rot_after[1]
+    ) + omega_cross_r[0]
+    v_lab_after_y = (
+        sin_theta * v_rot_after[0] + cos_theta * v_rot_after[1]
+    ) + omega_cross_r[1]
+    v_x, v_y = v_lab_after_x, v_lab_after_y
+
+
+# Main game loop
 running = True
 while running:
-    # Handle events (e.g., closing the window)
+    # Handle events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-    # Update the rotation angle
-    theta += omega * dt
+    # Update ball velocity due to gravity
+    v_y -= GRAVITY * DT
 
-    # Compute gravity in the rotating frame
-    # In the inertial frame, gravity is along -y, so in the rotating frame,
-    # it rotates with the frame: g_rot = R(-theta) * (0, -g)
-    g_rot = [-g * math.sin(theta), -g * math.cos(theta)]
+    # Update ball position
+    x += v_x * DT
+    y += v_y * DT
 
-    # Compute total acceleration in the rotating frame
-    # a_rot = g_rot + centrifugal_force + Coriolis_force
-    # Centrifugal force: omega² * (x_rot, y_rot)
-    # Coriolis force: 2 * omega * (v_y_rot, -v_x_rot)
-    a_rot = [
-        g_rot[0] + omega**2 * r_rot[0] + 2 * omega * v_rot[1],
-        g_rot[1] + omega**2 * r_rot[1] - 2 * omega * v_rot[0],
-    ]
-
-    # Update velocity using acceleration (v = v + a * dt)
-    v_rot[0] += a_rot[0] * dt
-    v_rot[1] += a_rot[1] * dt
-
-    # Update position using velocity (r = r + v * dt)
-    r_rot[0] += v_rot[0] * dt
-    r_rot[1] += v_rot[1] * dt
-
-    # Check for collisions with the square's walls
-    # Right wall (x = s/2)
-    if r_rot[0] > s / 2 - r:
-        v_rot[0] = -e * v_rot[0]  # Reflect normal velocity (x)
-        v_rot[1] *= 1 - f  # Reduce tangential velocity (y) due to friction
-        r_rot[0] = s / 2 - r  # Correct position to prevent penetration
-    # Left wall (x = -s/2)
-    elif r_rot[0] < -s / 2 + r:
-        v_rot[0] = -e * v_rot[0]  # Reflect normal velocity (x)
-        v_rot[1] *= 1 - f  # Reduce tangential velocity (y)
-        r_rot[0] = -s / 2 + r  # Correct position
-    # Top wall (y = s/2)
-    if r_rot[1] > s / 2 - r:
-        v_rot[1] = -e * v_rot[1]  # Reflect normal velocity (y)
-        v_rot[0] *= 1 - f  # Reduce tangential velocity (x)
-        r_rot[1] = s / 2 - r  # Correct position
-    # Bottom wall (y = -s/2)
-    elif r_rot[1] < -s / 2 + r:
-        v_rot[1] = -e * v_rot[1]  # Reflect normal velocity (y)
-        v_rot[0] *= 1 - f  # Reduce tangential velocity (x)
-        r_rot[1] = -s / 2 + r  # Correct position
-
-    # Transform positions to the inertial frame for display
+    # Compute rotation angle of the square
+    theta = OMEGA * t
     cos_theta = math.cos(theta)
     sin_theta = math.sin(theta)
 
-    # Ball position in the inertial frame
-    x_inertial = r_rot[0] * cos_theta - r_rot[1] * sin_theta
-    y_inertial = r_rot[0] * sin_theta + r_rot[1] * cos_theta
+    # Compute ball position in the rotating frame
+    x_rot = x * cos_theta + y * sin_theta
+    y_rot = -x * sin_theta + y * cos_theta
 
-    # Square vertices in the inertial frame
-    vertices_inertial = []
-    for vx, vy in vertices_rot:
-        vx_inertial = vx * cos_theta - vy * sin_theta
-        vy_inertial = vx * sin_theta + vy * cos_theta
-        vertices_inertial.append([vx_inertial, vy_inertial])
+    # Check for collisions with the square's sides (square size is 2x2 in simulation units)
+    if x_rot > 1 and abs(y_rot) <= 1:
+        handle_collision((-1, 0), theta)  # Right side
+    elif x_rot < -1 and abs(y_rot) <= 1:
+        handle_collision((1, 0), theta)  # Left side
+    elif y_rot > 1 and abs(x_rot) <= 1:
+        handle_collision((0, -1), theta)  # Top side
+    elif y_rot < -1 and abs(x_rot) <= 1:
+        handle_collision((0, 1), theta)  # Bottom side
 
-    # Convert to screen coordinates for drawing
-    # Ball
-    ball_screen = [
-        center_x + x_inertial * scale,
-        center_y - y_inertial * scale,  # Flip y-axis (Pygame has y increasing downward)
+    # Clear the screen
+    screen.fill((0, 0, 0))  # Black background
+
+    # Draw the spinning square
+    vertices = [
+        (1, 1),
+        (1, -1),
+        (-1, -1),
+        (-1, 1),
+    ]  # Square corners in simulation units
+    rotated_vertices = [
+        (vx * cos_theta - vy * sin_theta, vx * sin_theta + vy * cos_theta)
+        for vx, vy in vertices
     ]
-    # Square vertices
-    square_screen = []
-    for vx, vy in vertices_inertial:
-        sx = center_x + vx * scale
-        sy = center_y - vy * scale
-        square_screen.append([sx, sy])
-
-    # Draw everything
-    screen.fill((255, 255, 255))  # White background
-
-    # Draw the square (outline)
-    pygame.draw.lines(screen, (0, 0, 0), True, square_screen, 2)
+    screen_vertices = [
+        (WIDTH // 2 + vx * SCALE, HEIGHT // 2 - vy * SCALE)
+        for vx, vy in rotated_vertices
+    ]
+    pygame.draw.lines(screen, (255, 255, 255), True, screen_vertices, 2)
 
     # Draw the ball
-    pygame.draw.circle(
-        screen, (255, 0, 0), (int(ball_screen[0]), int(ball_screen[1])), int(r * scale)
-    )
+    screen_x = WIDTH // 2 + x * SCALE
+    screen_y = HEIGHT // 2 - y * SCALE
+    pygame.draw.circle(screen, (255, 0, 0), (int(screen_x), int(screen_y)), 10)
 
     # Update the display
     pygame.display.flip()
 
-    # Cap the frame rate to 60 fps
-    clock.tick(60)
+    # Increment time and control frame rate
+    t += DT
+    clock.tick(FPS)
 
 # Quit Pygame
 pygame.quit()
